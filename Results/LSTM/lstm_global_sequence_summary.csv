@@ -1,7 +1,0 @@
-metric,value
-global_seq_precision,0.34146341463414637
-global_seq_recall,0.6774193548387096
-global_seq_f1,0.4540540540540541
-global_TP,42.0
-global_FP,81.0
-global_FN,20.0
