@@ -1,63 +1,63 @@
 # Anomaly Detection in Spacecraft Telemetry
 
-Progetto di **Geometric Learning — Politecnico di Torino** dedicato al rilevamento di anomalie nelle serie temporali multivariate del dataset NASA SMAP.
+A **Geometric Learning project at Politecnico di Torino** investigating anomaly detection in multivariate time series from the NASA SMAP dataset.
 
-Il progetto confronta sei modelli, dalle baseline classiche alle reti neurali ricorrenti, per studiare due approcci: **prevedere il comportamento futuro** del segnale oppure **ricostruire il comportamento osservato**. Gli errori vengono trasformati in segnalazioni di anomalie attraverso una pipeline comune di smoothing e soglie dinamiche.
+The project compares six models, from classical baselines to recurrent neural networks, across two approaches: **forecasting future signal behavior** and **reconstructing observed behavior**. Model errors are converted into anomaly detections through a shared pipeline of smoothing and dynamic thresholding.
 
-**Notebook principale:** [Anomaly_Detection_V5.ipynb](Anomaly_Detection_V5.ipynb)
+**Main notebook:** [Anomaly_Detection_V5.ipynb](Anomaly_Detection_V5.ipynb)
 
 ## Dataset
 
-Il notebook utilizza la telemetria operativa del satellite **SMAP (Soil Moisture Active Passive)**, distribuita con il progetto [Telemanom](https://github.com/khundman/telemanom#data). Il dataset comprende segnali di telemetria, informazioni sui comandi e intervalli di anomalie annotati.
+The notebook uses operational telemetry from the **SMAP (Soil Moisture Active Passive)** satellite, distributed with the [Telemanom project](https://github.com/khundman/telemanom#data). The dataset includes telemetry signals, command information, and annotated anomaly intervals.
 
-Nell'esecuzione salvata nel notebook vengono analizzati **54 canali di telemetria**, con **25 feature per canale** e **68 sequenze anomale valutate**. Questi conteggi descrivono il sottoinsieme effettivamente utilizzato nel progetto.
+The execution saved in the notebook covers **54 telemetry channels**, with **25 features per channel** and **68 evaluated anomalous sequences**. These counts describe the subset used in this project.
 
-Ogni canale è rappresentato da due file `.npy`, uno per il training e uno per il test, con forma `(timesteps, 25)`. La feature `0` è il segnale principale da monitorare; le altre feature forniscono il contesto operativo. Il file `labeled_anomalies.csv` contiene gli identificativi dei canali, la missione e gli intervalli anomali nel test set.
+Each channel has two `.npy` files, one for training and one for testing, with shape `(timesteps, 25)`. Feature `0` is the primary signal being monitored; the remaining features provide operational context. The `labeled_anomalies.csv` file contains channel identifiers, spacecraft names, and anomaly intervals in the test set.
 
-Il notebook seleziona le righe con `spacecraft == "SMAP"`. I dati vengono utilizzati nella scala fornita, senza ulteriore standardizzazione, e le feature costanti vengono mantenute.
+The notebook selects rows where `spacecraft == "SMAP"`. Data is used at its supplied scale, without additional standardization, and constant features are retained.
 
-## Modelli confrontati
+## Models
 
-Ogni modello viene addestrato separatamente per ciascun canale.
+Each model is trained independently for each telemetry channel.
 
-| Modello | Approccio | Configurazione principale |
+| Model | Approach | Main configuration |
 | :--- | :--- | :--- |
-| PCA | Ricostruzione lineare | Componenti che spiegano il 95% della varianza |
-| Random Forest Regressor | Forecasting | 100 alberi su finestre appiattite |
-| MLP Regressor | Forecasting | Strati nascosti da 128 e 64 unità; dropout 0,2 |
-| MLP Autoencoder (AE) | Ricostruzione | Encoder-decoder denso; spazio latente di 32 dimensioni |
-| LSTM Regressor | Forecasting | Due strati LSTM da 80 unità; dropout 0,3 |
-| LSTM Autoencoder | Ricostruzione | Hidden size 64; spazio latente di 32 dimensioni |
+| PCA | Linear reconstruction | Components explaining 95% of the variance |
+| Random Forest Regressor | Forecasting | 100 trees operating on flattened windows |
+| MLP Regressor | Forecasting | Hidden layers with 128 and 64 units; dropout 0.2 |
+| MLP Autoencoder (AE) | Reconstruction | Dense encoder-decoder; 32-dimensional latent space |
+| LSTM Regressor | Forecasting | Two LSTM layers with 80 units each; dropout 0.3 |
+| LSTM Autoencoder | Reconstruction | Hidden size 64; 32-dimensional latent space |
 
 ## Pipeline
 
 ```mermaid
 flowchart LR
-    A[Telemetria multivariata] --> B[Finestre temporali]
+    A[Multivariate telemetry] --> B[Temporal windows]
     B --> C[Forecasting]
-    B --> D[Ricostruzione]
+    B --> D[Reconstruction]
     C --> E[Anomaly score]
     D --> E
-    E --> F[Smoothing EWMA]
-    F --> G[Soglia dinamica e pruning]
-    G --> H[Valutazione delle anomalie]
+    E --> F[EWMA smoothing]
+    F --> G[Dynamic thresholding and pruning]
+    G --> H[Anomaly evaluation]
 ```
 
-1. **Windowing:** finestre di 250 timesteps, con stride 1, su tutte le 25 feature.
-2. **Modellazione:** i regressori prevedono i successivi 10 valori della feature `0`; i modelli di ricostruzione ricostruiscono l'intera finestra multivariata.
-3. **Anomaly score:** errore assoluto sul segnale previsto, con aggregazione `first`, oppure errore quadratico medio di ricostruzione sulla feature `0` lungo la finestra.
-4. **Post-processing:** smoothing EWMA, soglia dinamica ispirata a Telemanom, buffer temporale, pruning e rilevamento su errori invertiti.
-5. **Valutazione:** confronto con gli intervalli annotati, analisi per canale e riepilogo globale.
+1. **Windowing:** 250-timestep windows with stride 1, using all 25 features.
+2. **Modeling:** regressors predict the next 10 values of feature `0`; reconstruction models reconstruct the entire multivariate input window.
+3. **Anomaly scoring:** absolute forecasting error with `first` aggregation, or mean squared reconstruction error over feature `0` across the input window.
+4. **Post-processing:** EWMA smoothing, Telemanom-inspired dynamic thresholding, temporal buffering, pruning, and detection on inverted errors.
+5. **Evaluation:** comparison with annotated intervals, per-channel analysis, and global summaries.
 
-La configurazione comune del post-processing utilizza batch da 70, finestra di 30 batch, `smoothing_perc=0.05`, `error_buffer=100`, `p=0.13` e `inverse=True`.
+The shared post-processing configuration uses batches of 70, a history window of 30 batches, `smoothing_perc=0.05`, `error_buffer=100`, `p=0.13`, and `inverse=True`.
 
-Le reti neurali utilizzano Adam, learning rate `1e-3`, MSE loss, batch size 64 e un massimo di 35 epoche. L'ultimo 20% delle finestre di training viene riservato alla validazione, con early stopping e ripristino dei pesi migliori (`patience=10`, `min_delta=0.0003`).
+Neural networks use Adam, a learning rate of `1e-3`, MSE loss, a batch size of 64, and up to 35 epochs. The final 20% of training windows is reserved for validation, with early stopping and restoration of the best weights (`patience=10`, `min_delta=0.0003`).
 
-## Risultati
+## Results
 
-Valori ricavati dagli **output già salvati nel notebook V5**, arrotondati a tre decimali; non rappresentano una nuova esecuzione.
+The following values come from the **outputs already saved in the V5 notebook**, rounded to three decimal places. They were not generated by a new execution.
 
-| Modello | Precision | Recall | F1 | F0.5 | AP macro | TP | FP | FN |
+| Model | Precision | Recall | F1 | F0.5 | Macro AP | TP | FP | FN |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | PCA | 0.641 | 0.368 | 0.467 | 0.558 | 0.322 | 25 | 14 | 43 |
 | Random Forest | 0.758 | 0.691 | 0.723 | 0.744 | 0.456 | 47 | 15 | 21 |
@@ -66,21 +66,21 @@ Valori ricavati dagli **output già salvati nel notebook V5**, arrotondati a tre
 | **LSTM** | **0.781** | **0.838** | **0.809** | **0.792** | **0.534** | **57** | **16** | **11** |
 | LSTM Autoencoder | 0.811 | 0.441 | 0.571 | 0.694 | 0.347 | 30 | 7 | 38 |
 
-La **LSTM Regressor** ottiene il miglior F1 e individua 57 delle 68 sequenze anomale valutate. La MLP è la seconda configurazione per F1. La LSTM Autoencoder raggiunge la precision più alta, ma ha una recall inferiore e perde 38 sequenze anomale.
+The **LSTM Regressor** achieves the highest F1 score and detects 57 of the 68 evaluated anomalous sequences. The MLP ranks second by F1. The LSTM Autoencoder achieves the highest precision but has lower recall, missing 38 anomalous sequences.
 
-Nel confronto svolto, i modelli di forecasting superano quelli di ricostruzione. La conclusione riguarda le configurazioni e il protocollo sperimentale utilizzati.
+Forecasting models outperform reconstruction models in this comparison. This conclusion applies to the tested configurations and evaluation protocol.
 
-### Come leggere le metriche
+### Interpreting the metrics
 
-- **Precision, recall, F1 e F0.5** sono calcolati sui conteggi globali di eventi, sommati tra i canali. Il rilevamento usa la sovrapposizione tra intervalli predetti e annotati. Nell'implementazione, ogni intervallo predetto viene associato al primo intervallo reale sovrapposto; i veri positivi contano gli intervalli reali distinti rilevati.
-- **AP macro** è la media per canale dell'Average Precision point-wise, calcolata con `average_precision_score`. Nel notebook è denominata `pr_auc_macro`; non è un'area calcolata con integrazione trapezoidale.
-- Gli score vengono riallineati alle coordinate del test con offset 250. Il confronto usa la lunghezza comune tra predizioni e label; i primi 250 score sono impostati a zero.
+- **Precision, recall, F1, and F0.5** are computed from global event counts summed across channels. Detection is based on overlap between predicted and annotated intervals. In the implementation, each predicted interval is matched to the first overlapping ground-truth interval; true positives count distinct ground-truth intervals detected.
+- **Macro AP** is the mean of per-channel point-wise Average Precision, computed with `average_precision_score`. It is named `pr_auc_macro` in the notebook and is not calculated using trapezoidal integration.
+- Scores are aligned to raw test coordinates using an offset of 250. Evaluation uses the common length of predictions and labels; the first 250 scores are set to zero.
 
-## Esecuzione
+## Getting started
 
-### 1. Preparare l'ambiente
+### 1. Set up the environment
 
-Il notebook riporta **Python 3.11.15** nei metadati. Dalla cartella del progetto, creare un ambiente Python 3.11 e installare le dipendenze:
+The notebook metadata records **Python 3.11.15**. From the project directory, create a Python 3.11 environment and install the dependencies:
 
 ```bash
 python3.11 -m venv .venv
@@ -89,13 +89,13 @@ python -m pip install numpy pandas matplotlib scikit-learn torch jupyterlab ipyk
 python -m ipykernel install --user --name smap-anomaly --display-name "SMAP Anomaly Detection"
 ```
 
-Su Windows, attivare l'ambiente con `.venv\Scripts\activate` al posto di `source .venv/bin/activate`.
+On Windows, activate the environment with `.venv\Scripts\activate` instead of `source .venv/bin/activate`.
 
-Le versioni delle librerie non sono fissate in un file di ambiente: questi comandi preparano le dipendenze necessarie, ma non ricostruiscono esattamente l'ambiente dell'esperimento originale.
+Library versions are not pinned in an environment file. These commands install the required dependencies but do not reproduce the original experimental environment exactly.
 
-### 2. Preparare i dati
+### 2. Prepare the data
 
-Seguire le indicazioni di download del [repository Telemanom](https://github.com/khundman/telemanom#Getting-Started) e disporre i file nella struttura seguente:
+Follow the download instructions in the [Telemanom repository](https://github.com/khundman/telemanom#Getting-Started) and arrange the files as follows:
 
 ```text
 .
@@ -109,10 +109,10 @@ Seguire le indicazioni di download del [repository Telemanom](https://github.com
 │           │   └── <chan_id>.npy
 │           └── test/
 │               └── <chan_id>.npy
-└── Results/                       # CSV generati dall'esecuzione
+└── Results/                       # CSV files generated during execution
 ```
 
-In alternativa, modificare le tre variabili iniziali del notebook:
+Alternatively, update the three path variables near the beginning of the notebook:
 
 ```python
 TRAIN_PATH = "Data_path/data/data/train"
@@ -120,37 +120,37 @@ TEST_PATH = "Data_path/data/data/test"
 LABELS = "Data_path/labeled_anomalies.csv"
 ```
 
-I percorsi sono relativi alla directory di lavoro del notebook. Per ogni canale SMAP presente nel CSV devono essere disponibili entrambi i file di training e test.
+Paths are relative to the notebook's working directory. Both training and test files must be available for every SMAP channel listed in the CSV.
 
-### 3. Avviare il notebook
+### 3. Run the notebook
 
 ```bash
 jupyter lab Anomaly_Detection_V5.ipynb
 ```
 
-Selezionare il kernel **SMAP Anomaly Detection** ed eseguire le celle in ordine. L'esecuzione completa ripete preprocessing, addestramento e valutazione dei sei modelli su tutti i canali.
+Select the **SMAP Anomaly Detection** kernel and run the cells in order. A full execution repeats preprocessing, training, and evaluation for all six models across all channels.
 
-Il notebook utilizza CPU o Apple MPS. La prima selezione del dispositivo include anche CUDA, ma le celle successive prima delle sezioni MLP, AE e LSTM sovrascrivono CUDA con CPU quando MPS non è disponibile. Per usare una GPU NVIDIA, uniformare queste celle alla selezione iniziale con `if / elif / else`.
+The notebook runs on CPU or Apple MPS. The initial device selection also includes CUDA, but later cells before the MLP, AE, and LSTM sections overwrite CUDA with CPU when MPS is unavailable. To use an NVIDIA GPU, update these cells to follow the initial `if / elif / else` selection logic.
 
-Le finestre di tutti i canali vengono materializzate in memoria: l'esecuzione completa può richiedere molta RAM e tempi di addestramento significativi.
+Windows for all channels are materialized in memory, so a full execution can require substantial RAM and training time.
 
-## Output
+## Outputs
 
-Il notebook produce grafici dei segnali, anomaly score, soglie, intervalli rilevati e confronti tra modelli. La funzione `save_results` scrive:
+The notebook produces plots of telemetry signals, anomaly scores, thresholds, detected intervals, and model comparisons. The `save_results` function writes:
 
 ```text
-Results/<metodo>/<metodo>_channel_results_.csv
-Results/<metodo>/<metodo>_global_summary_.csv
+Results/<method>/<method>_channel_results_.csv
+Results/<method>/<method>_global_summary_.csv
 ```
 
-I nomi dei metodi sono `Random_Forest`, `PCA`, `MLP`, `AE`, `LSTM` e `LSTM-AE`. I CSV vengono sovrascritti a ogni esecuzione delle rispettive celle di salvataggio.
+Method names are `Random_Forest`, `PCA`, `MLP`, `AE`, `LSTM`, and `LSTM-AE`. CSV files are overwritten whenever their corresponding saving cells are executed.
 
-I modelli addestrati e le predizioni restano nei dizionari in memoria. Il notebook V5 non salva né carica automaticamente checkpoint. I grafici del confronto finale vengono mostrati nel notebook; per esportarli, impostare `save_dir` nella chiamata a `plot_metric_comparisons`.
+Trained models and predictions remain in in-memory dictionaries. The V5 notebook does not automatically save or load checkpoints. Final comparison plots are displayed in the notebook; to export them, set `save_dir` in the call to `plot_metric_comparisons`.
 
-## Limiti e sviluppi futuri
+## Limitations and future work
 
-Le reti neurali non hanno un seed globale fissato, quindi i risultati possono variare tra esecuzioni. Inoltre, la separazione training/validazione avviene dopo il windowing: finestre adiacenti ai due lati del confine possono condividere osservazioni.
+Neural networks do not have a fixed global random seed, so results may vary between runs. Training and validation are also split after windowing: adjacent windows on either side of the split can share observations.
 
-Forecasting e ricostruzione condividono il post-processing, ma producono score con significato temporale diverso. Le metriche per evento misurano il rilevamento delle sequenze e non quantificano direttamente il ritardo di allarme.
+Forecasting and reconstruction share the post-processing pipeline but produce scores with different temporal meanings. Event-level metrics measure sequence detection and do not directly quantify detection delay.
 
-Le estensioni proposte nel notebook includono la calibrazione delle soglie su un set di validazione annotato separato, soglie specifiche per canale e score che sfruttino l'intero orizzonte di previsione. Le label di test devono rimanere riservate alla valutazione finale.
+Extensions proposed in the notebook include calibrating thresholds on a separate labeled validation set, using channel-specific thresholds, and designing scores that exploit the full prediction horizon. Test labels should remain reserved for final evaluation.
